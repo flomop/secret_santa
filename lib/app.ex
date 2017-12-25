@@ -36,9 +36,6 @@ defmodule App do
       worker(App.Matcher, [])
     ]
 
-    {port, _} = Integer.parse System.get_env("PORT")
-    _ = :gen_tcp.listen port, [:binary, packet: :line, active: false, reuseaddr: true]
-
     opts = [strategy: :one_for_one, name: App.Supervisor]
     Supervisor.start_link children, opts
   end
