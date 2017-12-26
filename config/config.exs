@@ -1,9 +1,9 @@
 use Mix.Config
 
 config :app,
-  bot_name: "yet_another_secret_santa_bot"
+  bot_name: "SexySecretSantaBot"
 
 config :nadia,
-  token: "407512387:AAEDwfdYWh_S9SixR4TY1itBSl31jfc4-78"
+  token: "522816819:AAHjvySAECPszMjorB5sICD1FN5RQ72odNU"
 
 import_config "#{Mix.env}.exs"

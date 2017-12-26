@@ -3,140 +3,220 @@ defmodule App.Commands do
   use App.Commander
   require Integer
 
-  alias App.Commands.Outside
+#  alias App.Commands.Outside
 
   command "add" do
-    agent = String.to_atom("Chat#{update.message.chat.id}")
+    chat_id = String.to_atom("#{update.message.chat.id}")
+    dets = Agent.get :info, & &1
+    chat_record = :dets.lookup dets, chat_id
 
-    if GenServer.whereis agent do
+    if Enum.empty? chat_record do
+      send_message "Please /start me first in your group or channel!"
+    else
       Logger.log :info, "Command /add received"
       user = update.message.from
 
-      list = Agent.get agent, & &1
+      [{_,list, lang}] = chat_record
+
       if user in list do
         send_message "Ah-h! You are already in the list!!!"
       else
-        Agent.update( agent, fn list -> [user | list] end)
+       :dets.insert dets, {chat_id, [user | list], lang}
+
         send_message "Greatings, #{user.first_name} #{user.last_name} (#{user.id})! You're in the army now! O-o-o!"
       end
-    else
-      send_message "Please /start me first!"
     end
   end
 
   command "delete" do
-    agent = String.to_atom("Chat#{update.message.chat.id}")
+    Logger.log :info, "Command /delete received"
+    chat_id = String.to_atom("#{update.message.chat.id}")
+    dets = Agent.get :info, & &1
+    chat_record = :dets.lookup dets, chat_id
 
-    if GenServer.whereis agent do
-      Logger.log :info, "Command /delete received"
+    if Enum.empty? chat_record do
+      send_message "Please /start me first in your group or channel!"
+    else
       user = update.message.from
-      list = Agent.get agent, & &1
+      [{_,list, lang}] = chat_record
 
-      Agent.update( agent, fn list -> List.delete( list, user) end)
+     :dets.insert dets, {chat_id, List.delete( list, user), lang}
 
       if user in list do
         send_message "Ok-ok! I'm deleting #{user.first_name} #{user.last_name} (#{user.id})! So sad, so sad!"
       else
         send_message "Who is that? Don't know any #{user.first_name} #{user.last_name}!"
       end
-    else
-      send_message "Please /start me first!"
     end
   end
 
   command "list" do
-    agent = String.to_atom("Chat#{update.message.chat.id}")
+    Logger.log :info, "Command /list received"
+    chat_id = String.to_atom("#{update.message.chat.id}")
+    dets = Agent.get :info, & &1
+    chat_record = :dets.lookup dets, chat_id
 
-    if GenServer.whereis agent do
-      list = Agent.get agent, & &1
+    if Enum.empty? chat_record do
+      send_message "Please /start me first in your group or channel!"
+    else
+      [{_,list,_}] = chat_record
+
       if Enum.empty? list do
         send_message "My list is empty!:'("
       else
-        send_message "Hm, let me see!"
-        Enum.each (Enum.with_index list, 1), fn {u, i} ->
-          send_message "(#{i}) #{u.first_name} #{u.last_name} (#{u.id})"
-        end
-        send_message "Do you know them?!"
+        send_message "Hm-mem-dem, let me see what I can do!"
+        list_str = Enum.map( (Enum.with_index list, 1), fn {u, i} ->
+                     "(#{i}) #{u.first_name} #{u.last_name} (#{u.id})"
+                   end)
+                   |> Enum.join("\n")
+
+        send_message list_str<>"\n\nDo you know them?! Can I kill them?"
       end
-    else
-      send_message "Please /start me first!"
     end
   end
 
-  command "start" do
-    agent = String.to_atom("Chat#{update.message.chat.id}")
+  command ["start", "restart"] do
+    Logger.log :info, "Command /start received"
+    chat_id = String.to_atom("#{update.message.chat.id}")
+    dets = Agent.get :info, & &1
 
-    if GenServer.whereis agent do
-      send_message "I'm already hot and ready!!! You can /add !"
+    unless Enum.empty?(:dets.lookup dets, chat_id) do
+      user = update.message.from
+      whoms = :dets.lookup dets, {:user, user.id}
+
+      unless Enum.empty? whoms do
+        [{{:user,_who_id}, whom}] = whoms
+       :dets.delete dets, {:user, user.id}
+        send_message "Let me see!"
+        Process.sleep 1000
+        send_message "You will be gifting #{whom.first_name} #{whom.last_name} (#{whom.id})"
+      else
+        send_message "I'm hot and ready!!! You can /add !"
+      end
     else
-      Agent.start_link( fn -> [] end, name: agent)
 
-      Logger.log :info, "Command /start received"
-      send_message "Welcome aboard! Add me to the group first!:^)"
+     :dets.insert dets, {chat_id, [], "en_US"}
+      send_message "Welcome aboard! First, add me to your group or channel!:^)"
+      # send_message "Please, choose your language:",
+      # reply_markup: %Model.InlineKeyboardMarkup {
+
+      # inline_keyboard: [
+      #   [
+      #     %{
+      #       callback_data: "/set_language en",
+      #       text: "English",
+      #     },
+      #     %{
+      #       callback_data: "/set_language ru",
+      #       text: "Russian",
+      #     },
+      #   ]
+      # ]}
     end
   end
 
   command "help" do
-    send_message "Ahtytytytyzh!!! Girls and boys, LET ME SPEEEK FROM MAY HARTS!!!"
-    send_message "Ya-ya-ya. That's not funny."
-    send_message "So-o-o-o-o. First you should start a dialog with me. Or I could not send private messages :'("
-    send_message "(1) click on my icon in this chat;\n(2) send message;\n(3) start."
-    send_message "Now use /add command IN THE GROUP to participate.\nAnd finally command me /go ."
-    send_message "You can repeat process with /again command.\nAnd finally, you can delete yourself from my list with /delete"
-    send_message "BUT REMEMBER MY CHILDRENS! THERE SHOULD BE EVEN NUMBER OF PARTICIPATORS!\n\nGOOD LUCK!"
- end
+    Logger.log :info, "Command /help received"
+
+    ["Ahtytytytyzh!!! Girls and boys, LET ME SPEEEK FROM MAY HARTS!!!",
+     "Ya-ya-ya. That's not funny, I know.",
+     "\nSo-o-o-o-o. First you should start a dialog with me or else I could not send private messages :'(",
+     "(1) click on my icon in this chat;",
+     "(2) send me a message;",
+     "(3) press start.",
+     "Now use /add command IN THE GROUP OR CHANNEL to participate.",
+     "When everyone are ready type /go .",
+     "Also, you can repeat process with /again command or /delete yourself from list."]
+
+    |> Enum.join("\n")
+    |> send_message()
+  end
 
   command "again" do
-    agent = String.to_atom("Chat#{update.message.chat.id}")
+    Logger.log :info, "Command /again received"
+    chat_id = String.to_atom("#{update.message.chat.id}")
+    dets = Agent.get :info, & &1
+    chat_record = :dets.lookup dets, chat_id
 
-    if GenServer.whereis agent do
-      send_message "Ok-ok!"
-      Agent.update agent, fn -> [] end
-      send_message "Now my magic list is empty!"
+    unless Enum.empty? chat_record do
+     :dets.insert dets, {chat_id, [], "en_US"}
+      send_message "Ok-ok!\nNow my magic list is empty!"
     else
-      send_message "Please /start me first!"
+      [{_,_,lang}] = chat_record
+     :dets.insert dets, {chat_id, [], lang}
+      send_message "Ok-ok!\nNow my magic list is empty!"
     end
   end
 
-  command "go" do
-    agent = String.to_atom("Chat#{update.message.chat.id}")
+  command "statistics" do
+    Logger.log :info, "Command /Statistics received"
+    dets = Agent.get :info, & &1
+    [{:helped, times}] = :dets.lookup dets, :helped
+    [{:helped_users, num}] = :dets.lookup dets, :helped_users
+    send_message "Helped #{times} times.\n#{num} users."
+  end
 
-    if GenServer.whereis agent do
-      Logger.log :info, "Command /go received"
+  command ["no","fuckyou"] do
+    [to_use|_] = Enum.shuffle ["Go fuck yourself!",
+                               "Lick my pussy!",
+                               "Fuck you fucking fuck!!!"]
+
+    send_message to_use
+  end
+
+  command "yes" do
+    [to_use|_] = Enum.shuffle ["I'm watching you while my mother fuck yours!"]
+
+    send_message to_use
+  end
+
+  command "go" do
+    Logger.log :info, "Command /go received"
+    chat_id = String.to_atom("#{update.message.chat.id}")
+    dets = Agent.get :info, & &1
+    chat_record = :dets.lookup dets, chat_id
+
+    if Enum.empty? chat_record do
+      send_message "Please /start me first in your group or channel!"
+    else
       send_message "Now anal magic is gonna happen!!! Prepair!"
 
-      list = Agent.get agent, & &1
-      if Integer.is_odd( length list) do
-        send_message "A-a-a-a-a-a-a-a! Can't touch this! Odd number! Hate odd numbers!!!"
-        send_message "Please, PLEASE, /delete or /add someone!!!"
+      [{_,list,_lang}] = chat_record
+      if Enum.empty? list do
+        send_message "Oy-yo-yoy!!! No one in the list! Don't be shy, /add !"
       else
-        if Enum.empty? list do
-          send_message "No one in the list!!! Don't be shy, /add !"
+        Process.sleep 500
+        send_message "Trahtibidoh!!!"
+        Process.sleep 500
+        send_message "Abracadabra!!!"
+        Process.sleep 500
+        send_message "Sim-salabim-ahalay-mahalay!!!"
+        Process.sleep 1000
+        send_message "No! It's not going anyway!!!:'("
+        Process.sleep 500
+        send_message "Hm, let's try another way!"
+        Process.sleep 500
+        send_message "BITCOIN! BIIIITCOIN!! BI-I-I-I-TTTTCCCCO-O-O-O-O-O-OIN!!!"
+
+        if length( list) == 1 do
+          [who] = list
+          Nadia.send_message who.id, "You will be gifting #{who.first_name} #{who.last_name} (#{who.id}).\nKnow him?:)"
         else
-          result = Agent.get agent, &App.proceed/1
-
-          Process.sleep 500
-          send_message "……………………………………Трахтибидох!!!"
-          Process.sleep 500
-          send_message "……………………………………"
-          Process.sleep 500
-          send_message "……………………………………Aбракадабра!!!"
-          Process.sleep 500
-          send_message "……………………………………Сим-салабим-ахалай-махалай!!!"
-          Process.sleep 500
-          send_message "……………………………………No! It's not going anyway!!!:'("
-          Process.sleep 500
-          send_message "……………………………………A! Of course!"
-          Process.sleep 500
-          send_message "……………………………………BITCOIN!!! coarse!"
-
-          Enum.each result, fn {who, whom} ->
-            Nadia.send_message who.id, "You will be gifting #{whom.first_name} #{whom.last_name} (#{whom.id})"
-          end
+          App.proceed( list)
+          |> Enum.each( fn {who, whom} ->
+                          Nadia.send_message who.id, "You will be gifting #{whom.first_name} #{whom.last_name} (#{whom.id})"
+                         :dets.insert dets, {{:user, who.id}, whom}
+                        end)
         end
+
+        [{:helped, times}] = :dets.lookup dets, :helped
+        [{:helped_users, num}] = :dets.lookup dets, :helped_users
+
+       :dets.insert( dets, {:helped, times+1})
+       :dets.insert( dets, {:helped_users, num + (length list)})
+
+        send_message "If you don't like results, send /go again."
       end
-    else
-      send_message "Please /start me first!"
     end
   end
 
@@ -241,14 +321,14 @@ defmodule App.Commands do
   # When you are with a callback query message, when you use `send_message` it
   # will know exatcly where to find it's chat ID. Same goes for the other kinds.
 
-  inline_query_command "foo" do
-    Logger.log :info, "Inline Query Command /foo"
-    # Where do you think the message will go for?
-    # If you answered that it goes to the user private chat with this bot,
-    # you're right. Since inline querys can't receive nothing other than
-    # Nadia.InlineQueryResult models. Telegram bot API could be tricky.
-    send_message "This came from an inline query"
-  end
+  # inline_query_command "foo" do
+  #   Logger.log :info, "Inline Query Command /foo"
+  #   # Where do you think the message will go for?
+  #   # If you answered that it goes to the user private chat with this bot,
+  #   # you're right. Since inline querys can't receive nothing other than
+  #   # Nadia.InlineQueryResult models. Telegram bot API could be tricky.
+  #   send_message "This came from an inline query"
+  # end
 
   # Fallbacks
 
